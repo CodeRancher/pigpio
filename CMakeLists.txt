@@ -3,57 +3,92 @@ cmake_minimum_required(VERSION 3.0)
 project(pigpio)
 
 set(CMAKE_C_FLAGS "-O3 -Wall -pthread")
-set(PIGPIO_FLAGS "-L. -lrt")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(PIGPIO_FLAGS "-L. -lrt")
+else()
+    set(PIGPIO_FLAGS "-L.")
+endif()
+
 #set(DESTDIR ${CMAKE_CURRENT_SOURCE_DIR}/build/dest)
 
 if(NOT DEFINED BUILD_SHARED_LIBS)
 set(BUILD_SHARED_LIBS "ON")
 endif(NOT DEFINED BUILD_SHARED_LIBS)
 
-# libpigpio.(so|a)
-add_library(pigpio pigpio.c command.c custom.cext)
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    # libpigpio.(so|a)
+    add_library(pigpio pigpio.c command.c custom.cext)
 
-# libpigpiod_if.(so|a)
-add_library(pigpiod_if pigpiod_if.c command.c)
+    # x_pigpio
+    add_executable(x_pigpio x_pigpio.c)
+    add_dependencies(x_pigpio pigpio)
+    target_link_libraries(x_pigpio
+            ${PIGPIO_FLAGS}
+            -lpigpio
+    )
 
-# libpigpiod_if2.(so|a)
-add_library(pigpiod_if2 pigpiod_if2.c command.c)
+    # pigpiod
+    add_executable(pigpiod pigpiod.c)
+    add_dependencies(pigpiod pigpio)
+    target_link_libraries(pigpiod
+            ${PIGPIO_FLAGS}
+            -lpigpio
+    )
+
+    # libpigpiod_if.(so|a)
+    add_library(pigpiod_if pigpiod_if.c command.c)
+
+    # x_pigpiod_if
+    add_executable(x_pigpiod_if x_pigpiod_if.c)
+    add_dependencies(x_pigpiod_if pigpiod_if)
+    target_link_libraries(x_pigpiod_if
+            ${PIGPIO_FLAGS}
+            -lpigpiod_if
+    )
+
+    # libpigpiod_if2.(so|a)
+    add_library(pigpiod_if2 pigpiod_if2.c command.c)
 
 
-# x_pigpio
-add_executable(x_pigpio x_pigpio.c)
-add_dependencies(x_pigpio pigpio)
-target_link_libraries(x_pigpio
-	${PIGPIO_FLAGS}
-	-lpigpio
-)
+    # x_pigpiod_if2
+    add_executable(x_pigpiod_if2 x_pigpiod_if2.c)
+    add_dependencies(x_pigpiod_if2 pigpiod_if2)
+    target_link_libraries(x_pigpiod_if2
+            ${PIGPIO_FLAGS}
+            -lpigpiod_if2
+    )
+else()
+    # libpigpiod_if2.(so|a)
+    add_library(pigpiod_if2 pigpiod_if2.c command.c)
+    target_link_libraries(pigpiod_if2
+            wsock32
+            ws2_32
+            ${PIGPIO_FLAGS}
+    )
 
-# x_pigpiod_if
-add_executable(x_pigpiod_if x_pigpiod_if.c)
-add_dependencies(x_pigpiod_if pigpiod_if)
-target_link_libraries(x_pigpiod_if
-	${PIGPIO_FLAGS}
-	-lpigpiod_if
-)
 
-# x_pigpiod_if2
-add_executable(x_pigpiod_if2 x_pigpiod_if2.c)
-add_dependencies(x_pigpiod_if2 pigpiod_if2)
-target_link_libraries(x_pigpiod_if2
-	${PIGPIO_FLAGS}
-	-lpigpiod_if2
-)
+    # x_pigpiod_if2
+    add_executable(x_pigpiod_if2 x_pigpiod_if2.c)
+    add_dependencies(x_pigpiod_if2 pigpiod_if2)
+    target_link_libraries(x_pigpiod_if2
+            wsock32
+            ws2_32
+            ${PIGPIO_FLAGS}
+            pigpiod_if2
+    )
+endif()
 
-# pigpiod
-add_executable(pigpiod pigpiod.c)
-add_dependencies(pigpiod pigpio)
-target_link_libraries(pigpiod
-	${PIGPIO_FLAGS}
-	-lpigpio
-)
+
 
 # pigs
 add_executable(pigs pigs.c command.c)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_link_libraries(pigs
+            wsock32
+            ws2_32
+            ${PIGPIO_FLAGS}
+    )
+endif()
 
 # pig2vcd
 add_executable(pig2vcd pig2vcd.c command.c)
@@ -67,18 +102,34 @@ install(DIRECTORY
 		WORLD_READ WORLD_EXECUTE
 )
 
-install(TARGETS pigpio pigpiod_if pigpiod_if2 pig2vcd pigpiod pigs
-	LIBRARY DESTINATION ${DESTDIR}/usr/local/lib
-	RUNTIME DESTINATION ${DESTDIR}/usr/local/bin
-	ARCHIVE DESTINATION ${DESTDIR}/usr/local/lib
-)
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    install(TARGETS pigpiod_if2 pig2vcd pigs
+            LIBRARY DESTINATION ${DESTDIR}/usr/local/lib
+            RUNTIME DESTINATION ${DESTDIR}/usr/local/bin
+            ARCHIVE DESTINATION ${DESTDIR}/usr/local/lib
+    )
 
-install(FILES pigpio.h pigpiod_if.h pigpiod_if2.h
-	DESTINATION ${DESTDIR}/usr/local/include
-	PERMISSIONS OWNER_READ OWNER_WRITE
-		GROUP_READ
-		WORLD_READ
-)
+    install(FILES pigpiod_if2.h
+            DESTINATION ${DESTDIR}/usr/local/include
+            PERMISSIONS OWNER_READ OWNER_WRITE
+                    GROUP_READ
+                    WORLD_READ
+    )
+else()
+    install(TARGETS pigpio pigpiod_if pigpiod_if2 pig2vcd pigpiod pigs
+            LIBRARY DESTINATION ${DESTDIR}/usr/local/lib
+            RUNTIME DESTINATION ${DESTDIR}/usr/local/bin
+            ARCHIVE DESTINATION ${DESTDIR}/usr/local/lib
+    )
+
+    install(FILES pigpio.h pigpiod_if.h pigpiod_if2.h
+            DESTINATION ${DESTDIR}/usr/local/include
+            PERMISSIONS OWNER_READ OWNER_WRITE
+                    GROUP_READ
+                    WORLD_READ
+    )
+endif()
+
 
 file(GLOB man_1_SRC "*.1")
 install(FILES ${man_1_SRC}
